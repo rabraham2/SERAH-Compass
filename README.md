@@ -444,7 +444,7 @@ orders["purchase_to_delivery_days"] = np.where(
     np.nan
 )
 
-# For modelling demand/revenue, typically exclude canceled/unavailable
+# For modelling demand/revenue, typically exclude cancelled/unavailable
 orders["is_valid_for_sales"] = orders["order_status"].isin(["delivered","shipped","invoiced"])
 
 
@@ -1011,88 +1011,7 @@ impact.sort_values("delta_revenue", ascending=False).to_csv(
 print("Saved:", OUT/"whatif_summary_10pct_markdown.csv", OUT/"whatif_impact_by_category_10pct.csv")
 print("Summary:", summary)
 
-E]--------> ## simulate_price_change.py ##
-
-
-import pandas as pd, numpy as np
-from pathlib import Path
-import joblib
-
-OUT = Path("Dataset/model_outputs")
-wk  = pd.read_csv(OUT/"weekly_by_category.csv", parse_dates=["order_week"]) \
-        .sort_values(["product_category_name_english","order_week"]) \
-        .reset_index(drop=True)
-pipe = joblib.load(OUT/"weekly_units_xgb.pkl")
-
-# Build the exact feature list the model was trained with
-TARGET = "units"
-cat_cols = ["product_category_name_english"]
-drop_cols = {"order_week","split",TARGET}
-num_cols = [c for c in wk.columns if c not in set(cat_cols) | drop_cols]
-FEAT_COLS = cat_cols + num_cols
-
-def simulate(percent_change=-0.10, categories=None, margin_default=0.30, margin_csv=None):
-    base = wk[wk["split"]=="valid"].copy()
-    sim  = base.copy()
-    mask = sim["product_category_name_english"].isin(categories) if categories else np.ones(len(sim), dtype=bool)
-
-    # Adjust current price & lag-1 price (simple approximation)
-    if "avg_price" in sim.columns:
-        sim.loc[mask, "avg_price"] *= (1.0 + percent_change)
-    if "avg_price_lag1" in sim.columns:
-        sim.loc[mask, "avg_price_lag1"] *= (1.0 + percent_change)
-
-    # Predict with EXACT same features as training
-    base_pred = pipe.predict(base[FEAT_COLS])
-    scn_pred  = pipe.predict(sim[FEAT_COLS])
-
-    # Revenue approximation from price * predicted units
-    base_rev = (base["avg_price"] * base_pred).sum()
-    scn_rev  = (sim["avg_price"]  * scn_pred).sum()
-    delta_units   = float((scn_pred - base_pred).sum())
-    delta_revenue = float(scn_rev - base_rev)
-
-    # Optional per-category margins
-    margin_map = {}
-    if margin_csv:
-        mm = pd.read_csv(margin_csv)
-        margin_map = dict(zip(mm["category"], mm["margin_rate"]))
-
-    tmp = pd.DataFrame({
-        "category": base["product_category_name_english"],
-        "base_units": base_pred, "scn_units": scn_pred,
-        "base_price": base["avg_price"], "scn_price": sim["avg_price"]
-    })
-    tmp["base_rev"] = tmp["base_price"] * tmp["base_units"]
-    tmp["scn_rev"]  = tmp["scn_price"]  * tmp["scn_units"]
-    tmp["mr"] = tmp["category"].map(margin_map).fillna(margin_default)
-    delta_margin = float(((tmp["scn_rev"] - tmp["base_rev"]) * tmp["mr"]).sum())
-
-    impact = (tmp.assign(delta_units=lambda d: d["scn_units"]-d["base_units"],
-                         delta_revenue=lambda d: d["scn_rev"]-d["base_rev"])
-                .groupby("category", as_index=False)
-                .agg(delta_units=("delta_units","sum"),
-                     delta_revenue=("delta_revenue","sum"))
-             )
-    summary = {
-        "percent_price_change": percent_change,
-        "delta_units": delta_units,
-        "delta_revenue": delta_revenue,
-        "delta_margin": delta_margin
-    }
-    return summary, impact
-
-# Example: 10% markdown across all categories
-summary, impact = simulate(percent_change=-0.10, margin_default=0.30)
-pd.DataFrame([summary]).to_csv(OUT/"whatif_summary_10pct_markdown.csv", index=False)
-impact.sort_values("delta_revenue", ascending=False).to_csv(
-    OUT/"whatif_impact_by_category_10pct.csv", index=False
-)
-print("Saved:", OUT/"whatif_summary_10pct_markdown.csv", OUT/"whatif_impact_by_category_10pct.csv")
-print("Summary:", summary)
-
-
-F]--------> ## build_and_train.py ##
+E]--------> ## build_and_train.py ##
 
 # build_and_train.py
 import pandas as pd
@@ -1213,7 +1132,7 @@ except Exception:
     wk["is_holiday_week"] = 0
 
 # ---------------------------
-# 3) Add lags — vectorized (no groupby.apply, no warnings)
+# 3) Add lags — vectorised (no groupby.apply, no warnings)
 # ---------------------------
 ALLOWED_LAGS = [1, 2, 4, 8, 12, 52]
 grp = wk.groupby("product_category_name_english", sort=False)
@@ -1254,7 +1173,7 @@ if wk_model.empty:
         raise RuntimeError("Not enough weekly history per category to create lagged features.")
 
 # ---------------------------
-# 4) Vectorized robust time split per category (never empty)
+# 4) Vectorised robust time split per category (never empty)
 # ---------------------------
 wk_model = wk_model.sort_values(["product_category_name_english","order_week"]).copy()
 g = wk_model.groupby("product_category_name_english", sort=False)
@@ -1337,7 +1256,7 @@ print("Training complete. Saved:",
 print("Validation metrics:", metrics)
 
 
-G]--------> ## make_margins_template.py ##
+F]--------> ## make_margins_template.py ##
 
 # Make margins template
 import pandas as pd
@@ -1349,7 +1268,7 @@ cats = sorted(wk["product_category_name_english"].unique())
 pd.DataFrame({"category": cats, "margin_rate": 0.30}).to_csv(OUT/"margins.csv", index=False)
 print("Edit margin rates here:", OUT/"margins.csv")
 
-H]--------> ## recommend_actions.py ##
+G]--------> ## recommend_actions.py ##
 
 # Recommend Actions
 import pandas as pd
@@ -1410,7 +1329,7 @@ best=(recs.sort_values(["category","delta_margin"], ascending=[True,False])
 best.to_csv(OUT/"recommended_actions.csv", index=False)
 print("Saved:", OUT/"recommended_actions.csv")
 
-I]--------> ## # select_actions_with_budget.py ##
+H]--------> ## # select_actions_with_budget.py ##
 
 # Select actions with budget
 import pandas as pd
@@ -1451,7 +1370,7 @@ sel.to_csv(OUT/"selected_actions.csv", index=False)
 print("Saved:", OUT/"selected_actions.csv")
 print(f"Selected {len(sel)} actions, spend ~ {spend:,.2f} within budget {TOTAL_BUDGET:,.2f}")
 
-J]--------> ## # make_price_plan_and_forecast.py ##
+I]--------> ## # make_price_plan_and_forecast.py ##
 
 # Make price plan and forecast
 
@@ -1509,7 +1428,7 @@ if (act["applied_pct"].abs() > 1.0).any():
 # horizon & future grid
 H = 8
 last_wk = wk_full["order_week"].max()
-# ✅ FIX: use to_timedelta (or datetime.timedelta). This is the corrected line:
+# FIX: use to_timedelta (or datetime.timedelta). This is the corrected line:
 future_weeks = [last_wk + pd.to_timedelta(7*(i+1), unit="D") for i in range(H)]
 
 cats = recent["product_category_name_english"].tolist()
@@ -1609,9 +1528,9 @@ fcast_out = OUT/"forecast_with_plan.csv"
 fcast.to_csv(fcast_out, index=False)
 print("Saved forecast:", fcast_out)
 
-K]--------> ## # forecast_next_weeks.py ##
+J]--------> ## # forecast_next_weeks.py ##
 
-# Forecast next weeks
+# Forecast next week
 # forecast_next_weeks.py
 import pandas as pd, numpy as np
 from pathlib import Path
@@ -1652,7 +1571,7 @@ recent = (wk_full.groupby("product_category_name_english")
 
 future = future.merge(recent, on="product_category_name_english", how="left")
 
-# ensure avg_price column exists even if no plan is provided
+# ensure the avg_price column exists even if no plan is provided
 future["avg_price"] = np.nan
 
 # merge plan if provided
@@ -1706,7 +1625,7 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     if "is_holiday_week" not in df.columns:
         df["is_holiday_week"] = 0
 
-    # vectorized lags matching training
+    # vectorised lags matching training
     LAGS = [1,2,4,8,12,52]
     for col in ["units","revenue","avg_price","rev_count","rev_score_avg"]:
         for L in LAGS:
@@ -1770,165 +1689,7 @@ out_path = OUT/"forecasts_next_weeks.csv"
 fcast.to_csv(out_path, index=False)
 print("Saved:", out_path)
 
-L]--------> ## # make_price_plan_and_forecast.py ##
-
-# Make price plan and forecast
-
-import pandas as pd, numpy as np
-from pathlib import Path
-import joblib
-
-OUT = Path("Dataset/model_outputs")
-OUT.mkdir(parents=True, exist_ok=True)
-
-# --- Load history and model ---
-wk_full  = pd.read_csv(OUT/"weekly_by_category_full.csv", parse_dates=["order_week"]) \
-              .sort_values(["product_category_name_english","order_week"]).reset_index(drop=True)
-wk_model = pd.read_csv(OUT/"weekly_by_category.csv", parse_dates=["order_week"])
-pipe = joblib.load(OUT/"weekly_units_xgb.pkl")
-
-# === 1) BUILD PRICE PLAN (robust) ===========================================
-recent = (wk_full.groupby("product_category_name_english")
-          .agg(base_price=("avg_price", lambda s: s.tail(4).mean()))
-          .reset_index())
-
-sel_path = OUT/"selected_actions.csv"
-rec_path = OUT/"recommended_actions.csv"
-if sel_path.exists():
-    actions = pd.read_csv(sel_path)
-elif rec_path.exists():
-    actions = pd.read_csv(rec_path)
-else:
-    actions = pd.DataFrame(columns=["category","recommended_pct"])
-
-if "category" not in actions.columns:
-    if "product_category_name_english" in actions.columns:
-        actions = actions.rename(columns={"product_category_name_english":"category"})
-    else:
-        actions["category"] = []
-
-pct_col = None
-for c in ["recommended_pct","recommended_price_change","percent_price_change"]:
-    if c in actions.columns:
-        pct_col = c; break
-if pct_col is None:
-    actions["recommended_pct"] = 0.0
-    pct_col = "recommended_pct"
-
-def norm(s: pd.Series) -> pd.Series:
-    return s.astype(str).str.strip().str.lower()
-
-recent["cat_key"]  = norm(recent["product_category_name_english"])
-actions["cat_key"] = norm(actions["category"])
-
-act = actions[["cat_key", pct_col]].copy().rename(columns={pct_col:"applied_pct"})
-if (act["applied_pct"].abs() > 1.0).any():
-    act["applied_pct"] = act["applied_pct"] / 100.0
-
-# horizon & future grid
-H = 8
-last_wk = wk_full["order_week"].max()
-# ✅ FIX: use to_timedelta (or datetime.timedelta). This is the corrected line:
-future_weeks = [last_wk + pd.to_timedelta(7*(i+1), unit="D") for i in range(H)]
-
-cats = recent["product_category_name_english"].tolist()
-plan = pd.MultiIndex.from_product([future_weeks, cats],
-          names=["order_week","product_category_name_english"]).to_frame(index=False)
-plan["cat_key"] = norm(plan["product_category_name_english"])
-
-plan = (plan.merge(recent[["product_category_name_english","cat_key","base_price"]],
-                   on=["product_category_name_english","cat_key"], how="left")
-             .merge(act, on="cat_key", how="left"))
-
-plan["applied_pct"]   = plan["applied_pct"].fillna(0.0)
-plan["planned_price"] = plan["base_price"] * (1.0 + plan["applied_pct"])
-
-diag = (plan.groupby("product_category_name_english", as_index=False)
-            .agg(base_price=("base_price","first"),
-                 applied_pct=("applied_pct","first"),
-                 planned_price=("planned_price","first")))
-diag["changed"] = np.where(diag["applied_pct"].abs() > 1e-9, "yes", "no")
-
-plan_out = OUT/"price_plan.csv"
-diag_out = OUT/"price_plan_debug.csv"
-plan.to_csv(plan_out, index=False)
-diag.to_csv(diag_out, index=False)
-print("Saved price plan:", plan_out)
-print("Saved diagnostics:", diag_out)
-print(f"Categories with non-zero action: {(diag['changed']=='yes').sum()}/{len(diag)}")
-
-# === 2) FORECAST USING THE PLAN (feature-safe) ===============================
-TARGET    = "units"
-cat_cols  = ["product_category_name_english"]
-drop_cols = {"order_week","split",TARGET}
-num_cols  = [c for c in wk_model.columns if c not in set(cat_cols) | drop_cols]
-FEAT_COLS = cat_cols + num_cols
-
-history = wk_full.copy()
-
-def compute_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.sort_values(["product_category_name_english","order_week"]).copy()
-    g  = df.groupby("product_category_name_english", sort=False)
-
-    df["weekofyear"] = df["order_week"].dt.isocalendar().week.astype(int)
-    df["year"]       = df["order_week"].dt.year
-    df["sin_woy"]    = np.sin(2*np.pi*df["weekofyear"]/52.0)
-    df["cos_woy"]    = np.cos(2*np.pi*df["weekofyear"]/52.0)
-    if "is_holiday_week" not in df.columns:
-        df["is_holiday_week"] = 0
-
-    for col in ["rev_count","rev_score_avg"]:
-        if col not in df: df[col] = np.nan
-        df[col] = df[col].fillna(g[col].transform(lambda s: s.tail(4).mean()))
-
-    LAGS = [1,2,4,8,12,52]
-    for col in ["units","revenue","avg_price","rev_count","rev_score_avg"]:
-        for L in LAGS:
-            df[f"{col}_lag{L}"] = g[col].shift(L)
-
-    df["units_roll4"]   = g["units"].transform(lambda s: s.rolling(4, min_periods=1).mean())
-    df["revenue_roll4"] = g["revenue"].transform(lambda s: s.rolling(4, min_periods=1).mean())
-    return df
-
-forecasts = []
-for wk_i in future_weeks:
-    step = plan[plan["order_week"]==wk_i][
-        ["order_week","product_category_name_english","planned_price"]
-    ].rename(columns={"planned_price":"avg_price"}).copy()
-
-    step["units"] = np.nan
-    step["revenue"] = np.nan
-    step["rev_count"] = np.nan
-    step["rev_score_avg"] = np.nan
-
-    tmp = pd.concat([history, step], ignore_index=True)
-    tmp = compute_features(tmp)
-
-    # proxy revenue for current step (model expects a 'revenue' feature)
-    mask = tmp["order_week"].eq(wk_i)
-    units_proxy = tmp.loc[mask, "units_lag1"].fillna(tmp.loc[mask, "units_roll4"]).fillna(0.0)
-    tmp.loc[mask, "revenue"] = tmp.loc[mask, "avg_price"] * units_proxy
-
-    for c in FEAT_COLS:
-        if c not in tmp.columns:
-            tmp[c] = 0.0
-
-    X = tmp.loc[mask, FEAT_COLS]
-    yhat = pipe.predict(X)
-
-    pred = tmp.loc[mask, ["order_week","product_category_name_english","avg_price"]].copy()
-    pred["units"]   = yhat
-    pred["revenue"] = pred["avg_price"] * pred["units"]
-
-    history = pd.concat([history, pred], ignore_index=True, sort=False)
-    forecasts.append(pred)
-
-fcast = pd.concat(forecasts, ignore_index=True)
-fcast_out = OUT/"forecast_with_plan.csv"
-fcast.to_csv(fcast_out, index=False)
-print("Saved forecast:", fcast_out)
-
-M]--------> ## # # compute_plan_impact.py ##
+K]--------> ## # # compute_plan_impact.py ##
 
 # compute_plan_impact.py
 import pandas as pd, numpy as np
@@ -1990,7 +1751,7 @@ totals.to_csv(totals_path, index=False)
 print("Saved:", impact_path, totals_path)
 print(totals)
 
-N]--------> ## # # plot_forecast.py ##
+L]--------> ## # # plot_forecast.py ##
 
 # Plot Forecast
 
@@ -2051,7 +1812,7 @@ for c in cats:
 
 print("Saved charts to:", OUT)
 
-O]--------> ## # # forecast_trimmed.py ##
+M]--------> ## # # forecast_trimmed.py ##
 
 import pandas as pd, numpy as np
 from pathlib import Path
@@ -2150,7 +1911,7 @@ fcast = pd.concat(forecasts, ignore_index=True)
 fcast.to_csv(OUT/"forecast_trimmed.csv", index=False)
 print("Saved:", OUT/"forecast_trimmed.csv")
 
-P]--------> ## # # build_and_train_no_leak.py ##
+N]--------> ## # # build_and_train_no_leak.py ##
 
 import pandas as pd, numpy as np
 from pathlib import Path
@@ -2184,7 +1945,7 @@ wk["max_warmup"] = wk["product_category_name_english"].map(maxlag_map).fillna(0)
 wk_model = wk[grp.cumcount() >= wk["max_warmup"]].copy()
 wk_model.drop(columns=["max_warmup"], inplace=True)
 
-# vectorized time split
+# vectorised time split
 wk_model = wk_model.sort_values(["product_category_name_english","order_week"]).copy()
 g = wk_model.groupby("product_category_name_english", sort=False)
 n = g["order_week"].transform("size")
@@ -2234,7 +1995,7 @@ wk_model.to_csv(BASE_OUT/"weekly_by_category_no_leak.csv", index=False)
 print("Saved:", BASE_OUT/"weekly_units_xgb_no_leak.pkl")
 print("Metrics:", metrics)
 
-Q]--------> ## # # forecast_no_leak.py ##
+O]--------> ## # # forecast_no_leak.py ##
 
 import pandas as pd, numpy as np
 from pathlib import Path
@@ -2319,7 +2080,7 @@ fcast = pd.concat(forecasts, ignore_index=True)
 fcast.to_csv(OUT/"forecast_no_leak.csv", index=False)
 print("Saved:", OUT/"forecast_no_leak.csv")
 
-R]--------> ## # # plot_validation_accuracy.py ##
+P]--------> ## # # plot_validation_accuracy.py ##
 
 # plot_validation_accuracy.py
 import pandas as pd
@@ -2413,7 +2174,7 @@ plt.close(fig)
 print("Saved per-category PNGs (val_ts_*.png) and val_scatter_overall.png in:", OUT)
 
 
-S]--------> ## # # evaluate_validation.py ##
+Q]--------> ## # # evaluate_validation.py ##
 
 
 # evaluate_validation.py  (fixed)
@@ -2521,7 +2282,7 @@ plt.tight_layout(); plt.savefig(OUT / "val_worst_bias_under.png", dpi=150); plt.
 pd.Series({"intercept": a, "slope": b}).to_csv(OUT / "calibration_params.csv")
 print("Saved: validation_overall_metrics.csv, validation_by_category.csv, val_parity_with_calibration.png, val_worst_*.png, calibration_params.csv")
 
-T]--------> ## # # plot_validation_overlay ##
+R]--------> ## # # plot_validation_overlay ##
 
 # plot_validation_overlay.py
 import numpy as np
@@ -2612,7 +2373,7 @@ per.assign(wMAPE_pct=(per.wMAPE*100))\
    .to_csv(OUT/"validation_leaderboard.csv", index=False)
 print("Saved:", OUT/"validation_leaderboard.csv")
 
-U]--------> ## # # build_validation_actions.py ##
+S]--------> ## # # build_validation_actions.py ##
 
 # Build validation actions
 
@@ -2713,7 +2474,7 @@ plt.tight_layout(); plt.savefig(OUT/"val_top_priority.png", dpi=150); plt.close(
 
 print("Saved PNGs: val_top_revenue_at_risk.png, val_top_priority.png")
 
-V]--------> ## # # apply_calibration_to_forecast.py ##
+T]--------> ## # # apply_calibration_to_forecast.py ##
 
 #Apply calibration to forecast
 
@@ -2783,7 +2544,7 @@ impact.sort_values("Δrevenue", ascending=False)\
 print("Saved:", OUT / "calibration_impact_summary.csv")
 
 
-W]--------> ## # # unify_forecast_and_rollup.py ##
+U]--------> ## # # unify_forecast_and_rollup.py ##
 
 
 # Create unified forecast & rollup
@@ -2814,7 +2575,7 @@ base_fcst = read_first_that_exists(
     parse_dates=["order_week"]
 ).copy()
 
-# Standardize base columns
+# Standardise base columns
 # expected columns: order_week, product_category_name_english, avg_price, units, revenue (revenue may or may not exist)
 base_fcst.rename(columns={"units": "units_base", "revenue": "revenue_base"}, inplace=True)
 if "avg_price" not in base_fcst.columns:
@@ -2844,7 +2605,7 @@ plan_path = OUT / "price_plan.csv"
 if plan_path.exists():
     plan = pd.read_csv(plan_path, parse_dates=["order_week"])
     # expected: order_week, product_category_name_english, planned_price (or base_price + planned_price)
-    # normalize column name if needed
+    # normalise column name if needed
     if "planned_price" not in plan.columns and "plan_price" in plan.columns:
         plan = plan.rename(columns={"plan_price": "planned_price"})
 
@@ -2961,7 +2722,7 @@ print("Horizon weeks:", fcst_tidy["order_week"].nunique())
 print("Categories   :", fcst_tidy["product_category_name_english"].nunique())
 
 
-X]--------> ## # # qa_and_readout.py ##
+V]--------> ## # # qa_and_readout.py ##
 
 # QA and readout
 
@@ -3093,7 +2854,7 @@ print("Saved:",
       OUT/"kpi_top_categories.csv")
 
 
-Y]--------> ## # # calibration_scatter.py ##
+W]--------> ## # # calibration_scatter.py ##
 
 # Calibration_scatter
 
@@ -3112,7 +2873,7 @@ def load_csv(path_candidates, parse_dates=None):
     return None, None
 
 def normalize_cols(df):
-    # standardize likely names
+    # standardise likely names
     rename = {}
     for c in df.columns:
         cl = c.strip().lower()
@@ -3243,7 +3004,7 @@ for cat in cats:
 print(f"Saved per-category calibration scatter plots to: {save_dir}")
 
 
-Z]--------> ## # # elasticity_explorer.py ##
+X]--------> ## # # elasticity_explorer.py ##
 
 import pandas as pd, numpy as np
 import matplotlib.pyplot as plt
@@ -3255,7 +3016,7 @@ import joblib
 OUT = Path("Dataset/model_outputs")
 OUT.mkdir(parents=True, exist_ok=True)
 
-# core artifacts produced earlier
+# core artefacts produced earlier
 wk_full  = (pd.read_csv(OUT/"weekly_by_category_full.csv",
                         parse_dates=["order_week"])
               .sort_values(["product_category_name_english","order_week"]))
@@ -3473,7 +3234,7 @@ plt.close()
 print("Saved plot:", OUT/"elasticity_top_sensitive.png")
 
 
-AA]--------> ## # # elasticity_recommendations_profit.py ##
+Y]--------> ## # # elasticity_recommendations_profit.py ##
 
 import pandas as pd, numpy as np
 from pathlib import Path
@@ -3497,7 +3258,7 @@ else:
 delta = pd.read_csv(OUT/"elasticity_deltas_by_category.csv")
 delta.columns = [c.lower() for c in delta.columns]
 
-# ---- normalize column names in rec ----
+# ---- normalise column names in rec ----
 cat_col = "product_category_name_english"
 if cat_col not in rec.columns:
     raise RuntimeError("Recommendations file is missing 'product_category_name_english'.")
@@ -3528,7 +3289,7 @@ if units0_col is None:
 if (price_best_col is None or units_best_col is None):
     if scenario_col is None:
         raise RuntimeError("No recommended scenario or recommended price/units found in the file.")
-    # normalize scenario type to float
+    # normalise scenario type to float
     rec["__scenario__"] = rec[scenario_col].astype(float)
     d_pick = delta[[cat_col,"scenario","price_s","units_s"]].copy()
     d_pick.rename(columns={"scenario":"__scenario__"}, inplace=True)
@@ -3561,7 +3322,7 @@ out_path = OUT/"elasticity_recommendations_profit.csv"
 rec.sort_values("profit_lift", ascending=False).to_csv(out_path, index=False)
 print("Saved profit recommendations to:", out_path)
 
-AB]--------> ## # # one_pagers.py ##
+Z]--------> ## # # one_pagers.py ##
 
 # Category one-pagers: baseline vs proposed price (warning-free)
 # - Uses Safe_Top sheet from price_recommendations_summary.xlsx
@@ -3571,7 +3332,7 @@ AB]--------> ## # # one_pagers.py ##
 import warnings
 warnings.filterwarnings(
     "ignore",
-    message="The behavior of DatetimeProperties.to_pydatetime is deprecated"
+    message="The behaviour of DatetimeProperties.to_pydatetime is deprecated"
 )
 
 import pandas as pd
@@ -3773,19 +3534,59 @@ print("Combined PDF:", pdf_path)
 ## Project Structure
 
 SERAH-Compass/
-├─ Data/
-│  ├─ online_sales_dataset.csv
 ├─ Dataset/
-│  ├─ processed_output_cleaned.csv
+│  ├─ audit_exports
+│  ├─ ├─ dataset_overview.csv
+│  ├─ ├─ missingness_summary.csv
+│  ├─ ├─ order_status_counts.csv
+│  ├─ clean_exports
+│  ├─ ├─ cleaning_log.csv
+│  ├─ ├─ customers_clean.csv
+│  ├─ ├─ fact_orders_clean.csv
+│  ├─ ├─ payments_by_order.csv
+│  ├─ ├─ products_clean.csv
+│  ├─ ├─ reviews_by_order.csv
+│  ├─ ├─ sellers_clean.csv
+│  ├─ model_outputs
+│  ├─ cost_per_category.csv
+│  ├─ olist_customers_dataset.csv
+│  ├─ olist_geolocation_dataset.csv
+│  ├─ olist_order_items_dataset.csv
+│  ├─ olist_order_payments_dataset.csv
+│  ├─ olist_order_reviews_dataset.csv
+│  ├─ olist_orders_dataset.csv
+│  ├─ olist_products_dataset.csv
+│  ├─ olist_sellers_dataset.csv
+│  ├─ product_category_name_translation.csv
 ├─ Scripts/
-│  ├─ data_preparation.py
-│  ├─ data_distribution.py
-├─ Results
+│  ├─ data_cleaning.py
+│  ├─ build_weekly_features.py
+│  ├─ train_forecast.py
+│  ├─ simulate_price_change.py
+│  ├─ build_and_train.py
+│  ├─ make_margins_template.py
+│  ├─ recommend_actions.py
+│  ├─ select_actions_with_budget.py
+│  ├─ make_price_plan_and_forecast.py
+│  ├─ forecast_next_weeks.py
+│  ├─ compute_plan_impact.py
+│  ├─ plot_forecast.py
+│  ├─ forecast_trimmed.py
+│  ├─ build_and_train_no_leak.py
+│  ├─ forecast_no_leak.py
+│  ├─ plot_validation_accuracy.py
+│  ├─ evaluate_validation.py
+│  ├─ plot_validation_overlay.py
+│  ├─ build_validation_actions.py
+│  ├─ apply_calibration_to_forecast.py
+│  ├─ unify_forecast_and_rollup.py
+│  ├─ qa_and_readout.py
+│  ├─ calibration_scatter.py
+│  ├─ elasticity_explorer.py
+│  ├─ elasticity_recommendations_profit.py
+│  ├─ one_pagers.py
 ├─ README.md
 ├─ LICENSE
-
-
-
 
 
 
@@ -3797,7 +3598,7 @@ Copyright (c) 2025 rabraham2
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
+in the Software without restriction, including, without limitation, the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
