@@ -96,3 +96,4 @@ barh_top(worst_loss.assign(rev_lift_neg=worst_loss["rev_lift"].abs()),
          "Top categories — biggest revenue risk (choose scenario)",
          "elasticity_biggest_risk.png",
          xlabel="Absolute revenue drop vs baseline")
+
