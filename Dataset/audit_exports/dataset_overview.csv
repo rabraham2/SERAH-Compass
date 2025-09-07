@@ -1,0 +1,2 @@
+orders_date_min,orders_date_max,orders_total,order_items_rows,products_rows,payments_rows,reviews_rows,customers_rows,sellers_rows,geolocation_rows,orders_with_reviews_pct,qty_column_present_in_items
+04-09-2016 21:15,17-10-2018 17:30,99441,112650,32951,103886,99224,99441,3095,1000163,0.992276827,FALSE
