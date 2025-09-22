@@ -75,7 +75,7 @@ Given historical order, item price, category and lagged review signals, how shou
 
   a) Feature engineering - Weekly aggregation (Mon-anchored), seasonality (weekofyear, sin/cos), leak-safe lags {1,2,4,8,12,52}, rolling means, review features aggregated per order → per week → then lagged/rolled.
 
-  b) Modeling - scikit-learn Pipeline: OneHotEncoder (category) + XGBRegressor (units). Per-category temporal split: last ≈20% (cap 12 weeks) as validation.
+  b) Modelling - scikit-learn Pipeline: OneHotEncoder (category) + XGBRegressor (units). Per-category temporal split: last ≈20% (cap 12 weeks) as validation.
 
   c) Calibration - Linear per-category: units_cal = a + b * units_base.
 
